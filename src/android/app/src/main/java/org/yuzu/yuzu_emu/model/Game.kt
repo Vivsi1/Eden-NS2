@@ -102,5 +102,8 @@ class Game(
         val extensions: Set<String> = HashSet(
             listOf("xci", "nsp", "nca", "nro", "nsz", "xcz")
         )
+
+        fun isSupportedFile(uri: Uri): Boolean =
+            extensions.contains(FileUtil.getExtension(uri)) || FileUtil.getFilename(uri) == "main"
     }
 }

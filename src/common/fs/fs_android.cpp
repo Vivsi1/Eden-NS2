@@ -7,6 +7,10 @@
 #include "common/fs/fs_android.h"
 #include "common/string_util.h"
 
+#include <android/log.h>
+
+#define SAF_LOG(...) __android_log_print(ANDROID_LOG_INFO, "EdenSAF", __VA_ARGS__)
+
 namespace Common::FS::Android {
 
 void RegisterCallbacks(JNIEnv* env, jclass clazz) {
@@ -22,6 +26,8 @@ void RegisterCallbacks(JNIEnv* env, jclass clazz) {
     s_file_exists = env->GetStaticMethodID(native_library, "exists", "(Ljava/lang/String;)Z");
     s_open_content_uri = env->GetStaticMethodID(native_library, "openContentUri",
                                                 "(Ljava/lang/String;Ljava/lang/String;)I");
+    s_get_directory_entries = env->GetStaticMethodID(native_library, "getDirectoryEntries",
+                                                      "(Ljava/lang/String;)[Ljava/lang/String;");
 }
 
 void UnRegisterCallbacks() {
@@ -33,6 +39,7 @@ void UnRegisterCallbacks() {
     s_file_exists = nullptr;
 
     s_open_content_uri = nullptr;
+    s_get_directory_entries = nullptr;
 }
 
 bool IsContentUri(const std::string& path) {
@@ -45,8 +52,11 @@ bool IsContentUri(const std::string& path) {
 }
 
 s32 OpenContentUri(const std::string& filepath, OpenMode openmode) {
-    if (s_open_content_uri == nullptr)
+    SAF_LOG("OpenContentUri path=%s", filepath.c_str());
+    if (s_open_content_uri == nullptr) {
+        SAF_LOG("OpenContentUri callback is null");
         return -1;
+    }
 
     const char* mode = "";
     switch (openmode) {
@@ -68,9 +78,12 @@ u64 GetSize(const std::string& filepath) {
         return 0;
     }
     auto env = Common::Android::GetEnvForThread();
-    return static_cast<u64>(env->CallStaticLongMethod(
+    const auto result = static_cast<u64>(env->CallStaticLongMethod(
         native_library, s_get_size,
-        Common::Android::ToJString(Common::Android::GetEnvForThread(), filepath)));
+        Common::Android::ToJString(env, filepath)));
+    SAF_LOG("GetSize path=%s result=%llu", filepath.c_str(),
+            static_cast<unsigned long long>(result));
+    return result;
 }
 
 bool IsDirectory(const std::string& filepath) {
@@ -117,6 +130,35 @@ std::string GetFilename(const std::string& filepath) {
         return {};
     }
     return Common::Android::GetJString(env, j_return);
+}
+
+std::vector<std::string> GetDirectoryEntries(const std::string& filepath) {
+    SAF_LOG("GetDirectoryEntries path=%s", filepath.c_str());
+    std::vector<std::string> entries;
+    if (s_get_directory_entries == nullptr) {
+        return entries;
+    }
+    auto env = Common::Android::GetEnvForThread();
+    auto j_filepath = Common::Android::ToJString(env, filepath);
+    auto j_entries = static_cast<jobjectArray>(
+        env->CallStaticObjectMethod(native_library, s_get_directory_entries, j_filepath));
+    if (j_entries == nullptr) {
+        env->DeleteLocalRef(j_filepath);
+        return entries;
+    }
+    const auto count = env->GetArrayLength(j_entries);
+    entries.reserve(static_cast<std::size_t>(count));
+    for (jsize i = 0; i < count; ++i) {
+        auto j_entry = static_cast<jstring>(env->GetObjectArrayElement(j_entries, i));
+        if (j_entry != nullptr) {
+            entries.emplace_back(Common::Android::GetJString(env, j_entry));
+            env->DeleteLocalRef(j_entry);
+        }
+    }
+    env->DeleteLocalRef(j_entries);
+    env->DeleteLocalRef(j_filepath);
+    SAF_LOG("GetDirectoryEntries path=%s count=%zu", filepath.c_str(), entries.size());
+    return entries;
 }
 
 } // namespace Common::FS::Android

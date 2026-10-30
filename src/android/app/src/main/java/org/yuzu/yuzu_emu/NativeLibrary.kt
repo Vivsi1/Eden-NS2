@@ -73,11 +73,14 @@ object NativeLibrary {
     @Keep
     @JvmStatic
     fun getSize(path: String?): Long {
-        return if (DocumentsTree.isNativePath(path!!)) {
+        android.util.Log.i("EdenSAF", "JNI getSize path=$path")
+        val result = if (DocumentsTree.isNativePath(path!!)) {
             YuzuApplication.documentsTree!!.getFileSize(path)
         } else {
             FileUtil.getFileSize(path)
         }
+        android.util.Log.i("EdenSAF", "JNI getSize result=$result path=$path")
+        return result
     }
 
     @Keep
@@ -106,8 +109,17 @@ object NativeLibrary {
         if (DocumentsTree.isNativePath(path)) {
             YuzuApplication.documentsTree!!.getParentDirectory(path)
         } else {
-            path
+            FileUtil.getParentDirectory(path)
         }
+
+    @Keep
+    @JvmStatic
+    fun getDirectoryEntries(path: String): Array<String> {
+        android.util.Log.i("EdenSAF", "JNI getDirectoryEntries path=$path")
+        val entries = FileUtil.getDirectoryEntries(path)
+        android.util.Log.i("EdenSAF", "JNI getDirectoryEntries count=${entries.size} path=$path")
+        return entries
+    }
 
     @Keep
     @JvmStatic

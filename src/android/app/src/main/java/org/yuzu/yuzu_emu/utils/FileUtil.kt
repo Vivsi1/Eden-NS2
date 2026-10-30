@@ -38,6 +38,16 @@ object FileUtil {
 
     private val context get() = YuzuApplication.appContext
 
+    private fun traceUri(tag: String, uri: Uri) {
+        val resolver = context.contentResolver
+        val treeId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull()
+        val documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
+        val grants = resolver.persistedUriPermissions.joinToString {
+            "${it.uri} read=${it.isReadPermission} write=${it.isWritePermission}"
+        }
+        Log.info("[SAF-TRACE] $tag uri=$uri authority=${uri.authority} treeId=$treeId documentId=$documentId persisted=[$grants]")
+    }
+
     /**
      * Create a file from directory with filename.
      * @param context Application context
@@ -129,8 +139,15 @@ object FileUtil {
                 DocumentsContract.getDocumentId(uri)
             }
             val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(uri, docId)
+            traceUri("listFiles input", uri)
+            Log.info("[SAF-TRACE] listFiles childrenUri=$childrenUri docId=$docId")
             c = resolver.query(childrenUri, columns, null, null, null)
-            while (c!!.moveToNext()) {
+            if (c == null) {
+                Log.error("[SAF-TRACE] listFiles query returned null cursor: $childrenUri")
+                return emptyArray()
+            }
+            Log.info("[SAF-TRACE] listFiles cursorCount=${c.count} uri=$childrenUri")
+            while (c.moveToNext()) {
                 val documentId = c.getString(0)
                 val documentName = c.getString(1)
                 val documentMimeType = c.getString(2)
@@ -139,11 +156,40 @@ object FileUtil {
                 results.add(document)
             }
         } catch (e: Exception) {
-            Log.error("[FileUtil]: Cannot list file error: " + e.message)
+            Log.error("[SAF-TRACE] listFiles failed: ${android.util.Log.getStackTraceString(e)}")
         } finally {
             closeQuietly(c)
         }
         return results.toTypedArray()
+    }
+
+    fun getParentDirectory(path: String): String {
+        val uri = Uri.parse(path)
+        return try {
+            val documentId = DocumentsContract.getDocumentId(uri)
+            val treeDocumentId = DocumentsContract.getTreeDocumentId(uri)
+            if (documentId == treeDocumentId) {
+                uri.toString()
+            } else {
+                val parentDocumentId = documentId.substringBeforeLast('/', "")
+                if (parentDocumentId.isEmpty()) uri.toString()
+                else DocumentsContract.buildDocumentUriUsingTree(uri, parentDocumentId).toString()
+            }
+        } catch (_: Exception) {
+            uri.toString()
+        }
+    }
+
+    @JvmStatic
+    fun getDirectoryEntries(path: String): Array<String> {
+        val uri = Uri.parse(path)
+        traceUri("getDirectoryEntries", uri)
+        val entries = listFiles(uri).map { it.uri.toString() }.toTypedArray()
+        Log.info("[SAF-TRACE] getDirectoryEntries count=${entries.size} parent=$uri")
+        entries.take(30).forEachIndexed { index, entry ->
+            Log.info("[SAF-TRACE] entry[$index]=$entry")
+        }
+        return entries
     }
 
     /**
@@ -241,18 +287,26 @@ object FileUtil {
     @JvmStatic
     fun getFileSize(path: String): Long {
         val resolver = context.contentResolver
-        val columns = arrayOf(
-            DocumentsContract.Document.COLUMN_SIZE
-        )
+        val columns = arrayOf(DocumentsContract.Document.COLUMN_SIZE)
         var size: Long = 0
         var c: Cursor? = null
+        val mUri = Uri.parse(path)
         try {
-            val mUri = path.toUri()
+            traceUri("getFileSize", mUri)
+            Log.info("[SAF-TRACE] getFileSize query uri=$mUri")
             c = resolver.query(mUri, columns, null, null, null)
-            c!!.moveToNext()
-            size = c.getLong(0)
+            if (c == null) {
+                Log.error("[SAF-TRACE] getFileSize query returned null cursor uri=$mUri")
+                return 0
+            }
+            val moved = c.moveToFirst()
+            Log.info("[SAF-TRACE] getFileSize cursor moved=$moved count=${c.count} uri=$mUri")
+            if (moved && !c.isNull(0)) {
+                size = c.getLong(0)
+            }
+            Log.info("[SAF-TRACE] getFileSize result=$size uri=$mUri")
         } catch (e: Exception) {
-            Log.error("[FileUtil]: Cannot get file size, error: " + e.message)
+            Log.error("[SAF-TRACE] getFileSize failed uri=$mUri exception=${android.util.Log.getStackTraceString(e)}")
         } finally {
             closeQuietly(c)
         }

@@ -166,7 +166,7 @@ object GameHelper {
                     NativeLibrary.addGameFolderFileToFilesystemProvider(filePath)
                 }
 
-                if (Game.extensions.contains(extension)) {
+                if (Game.isSupportedFile(it.uri)) {
                     val game = getGame(it.uri, true, false)
                     if (game != null) {
                         games.add(game)
