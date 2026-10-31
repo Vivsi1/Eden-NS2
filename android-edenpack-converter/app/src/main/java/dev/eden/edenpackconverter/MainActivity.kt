@@ -1,6 +1,6 @@
 package dev.eden.edenpackconverter
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -22,7 +22,7 @@ import java.security.MessageDigest
 import java.util.concurrent.Executors
 import kotlin.math.min
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private var source: Uri? = null
     private var sourceLabel = "No folder selected"
