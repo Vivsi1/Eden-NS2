@@ -171,7 +171,11 @@ AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(FileSys
 
     // The loose RomFS beside the exefs folder (as ReadRomFS finds it).
     if (const auto title_dir = file_dir->GetParentDirectory()) {
-        romfs_version = RomFSProductVersion(title_dir->GetSubdirectory("romfs"));
+        auto romfs_dir = title_dir->GetSubdirectory("romfs");
+        if (!romfs_dir) {
+            romfs_dir = title_dir->GetSubdirectory("RomFS");
+        }
+        romfs_version = RomFSProductVersion(romfs_dir);
     }
 }
 
@@ -361,10 +365,17 @@ ResultStatus AppLoader_DeconstructedRomDirectory::ReadRomFS(FileSys::VirtualFile
         }
         if (romfs == nullptr) {
             auto loose = directory->GetSubdirectory("romfs");
-            if (!loose && directory->GetName() == "exefs") {
+            if (!loose) {
+                loose = directory->GetSubdirectory("RomFS");
+            }
+            if (!loose && (directory->GetName() == "exefs" ||
+                           directory->GetName() == "ExeFS")) {
                 const auto parent = directory->GetParentDirectory();
                 if (parent) {
                     loose = parent->GetSubdirectory("romfs");
+                    if (!loose) {
+                        loose = parent->GetSubdirectory("RomFS");
+                    }
                 }
             }
             if (loose) {

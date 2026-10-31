@@ -1,0 +1,28 @@
+name: EdenPack tests
+
+on:
+  push:
+    branches:
+      - feature/edenpack-prototype
+    paths:
+      - "tools/edenpack/**"
+      - ".github/workflows/edenpack-tests.yml"
+  pull_request:
+    paths:
+      - "tools/edenpack/**"
+      - ".github/workflows/edenpack-tests.yml"
+
+jobs:
+  edenpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run EdenPack tests
+        run: python -m unittest discover -s tools/edenpack -v
+      - name: Check CLI help
+        run: python tools/edenpack/edenpack.py --help
+      - name: Check benchmark CLI help
+        run: python tools/edenpack/benchmark_edenpack.py --help
