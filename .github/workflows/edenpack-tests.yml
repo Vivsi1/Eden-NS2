@@ -24,3 +24,5 @@ jobs:
         run: python -m unittest discover -s tools/edenpack -v
       - name: Check CLI help
         run: python tools/edenpack/edenpack.py --help
+      - name: Check benchmark CLI help
+        run: python tools/edenpack/benchmark_edenpack.py --help
