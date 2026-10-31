@@ -8,11 +8,7 @@ Standalone Android app for converting an extracted game directory into EdenPack 
 - A destination document provider that supports seekable writable files (the Android system Files provider does).
 
 ## Build
-Open this directory in Android Studio, or run:
-
-```sh
-./gradlew assembleDebug
-```
+Open this directory in Android Studio with Gradle 8.13, or run `gradle assembleDebug` from this directory.
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`
 
