@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <atomic>
 #include <utility>
 
+#include "common/logging.h"
 #include "core/file_sys/vfs/vfs_offset.h"
 
 namespace FileSys {
@@ -48,7 +50,19 @@ bool OffsetVfsFile::IsReadable() const {
 }
 
 std::size_t OffsetVfsFile::Read(u8* data, std::size_t length, std::size_t r_offset) const {
-    return file->Read(data, TrimToFit(length, r_offset), offset + r_offset);
+    static std::atomic_size_t trace_count{};
+    const auto sequence = trace_count.fetch_add(1, std::memory_order_relaxed);
+    const auto bounded = TrimToFit(length, r_offset);
+    const auto source_offset = offset + r_offset;
+    const auto actual = file->Read(data, bounded, source_offset);
+    if (sequence < 512 || actual != bounded) {
+        LOG_INFO(Loader,
+                 "[EDENPACK_TRACE] layer=romfs_file seq={} name={} logical_offset={} "
+                 "logical_size={} source_offset={} requested={} returned={}",
+                 sequence, name.empty() ? file->GetName() : name, r_offset, size, source_offset,
+                 bounded, actual);
+    }
+    return actual;
 }
 
 std::size_t OffsetVfsFile::Write(const u8* data, std::size_t length, std::size_t r_offset) {

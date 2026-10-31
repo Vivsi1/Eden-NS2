@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdio>
 #include <iterator>
@@ -355,11 +356,28 @@ bool RealVfsFile::IsReadable() const {
 }
 
 std::size_t RealVfsFile::Read(u8* data, std::size_t length, std::size_t offset) const {
+    static std::atomic_size_t trace_count{};
+    const auto sequence = trace_count.fetch_add(1, std::memory_order_relaxed);
     auto lk = base.RefreshReference(path, perms, *reference);
-    if (!reference->file || !reference->file->Seek(static_cast<s64>(offset))) {
+    if (!reference->file) {
+        LOG_ERROR(Common_Filesystem,
+                  "[EDENPACK_TRACE] layer=saf_read_open_failed seq={} path={} offset={} length={}",
+                  sequence, path, offset, length);
         return 0;
     }
-    return reference->file->ReadSpan(std::span{data, length});
+    if (!reference->file->Seek(static_cast<s64>(offset))) {
+        LOG_ERROR(Common_Filesystem,
+                  "[EDENPACK_TRACE] layer=saf_seek_failed seq={} path={} offset={} length={}",
+                  sequence, path, offset, length);
+        return 0;
+    }
+    const auto actual = reference->file->ReadSpan(std::span{data, length});
+    if (sequence < 512 || actual != length) {
+        LOG_INFO(Common_Filesystem,
+                 "[EDENPACK_TRACE] layer=saf_read seq={} path={} offset={} requested={} returned={}",
+                 sequence, path, offset, length, actual);
+    }
+    return actual;
 }
 
 std::size_t RealVfsFile::Write(const u8* data, std::size_t length, std::size_t offset) {

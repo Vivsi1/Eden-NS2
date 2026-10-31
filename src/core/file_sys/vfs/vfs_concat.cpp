@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <atomic>
 #include <utility>
 
 #include "common/assert.h"
+#include "common/logging.h"
 #include "core/file_sys/vfs/vfs_concat.h"
 #include "core/file_sys/vfs/vfs_static.h"
 
@@ -12,7 +14,9 @@ namespace FileSys {
 
 ConcatenatedVfsFile::ConcatenatedVfsFile(std::string&& name_, ConcatenationMap&& concatenation_map_)
     : concatenation_map(std::move(concatenation_map_)), name(std::move(name_)) {
-    DEBUG_ASSERT(this->VerifyContinuity());
+    if (!this->VerifyContinuity()) {
+        LOG_ERROR(Loader, "[EDENPACK_TRACE] concatenation map is NOT contiguous: {}", this->name);
+    }
 }
 
 bool ConcatenatedVfsFile::VerifyContinuity() const {
@@ -134,6 +138,13 @@ bool ConcatenatedVfsFile::IsReadable() const {
 }
 
 std::size_t ConcatenatedVfsFile::Read(u8* data, std::size_t length, std::size_t offset) const {
+    static std::atomic_size_t trace_count{};
+    const auto sequence = trace_count.fetch_add(1, std::memory_order_relaxed);
+    const bool trace = sequence < 512;
+    if (trace) {
+        LOG_INFO(Loader, "[EDENPACK_TRACE] layer=concat_begin seq={} name={} offset={} length={} size={}",
+                 sequence, name, offset, length, GetSize());
+    }
     const ConcatenationEntry key{
         .offset = offset,
         .file = nullptr,
@@ -166,6 +177,13 @@ std::size_t ConcatenatedVfsFile::Read(u8* data, std::size_t length, std::size_t 
         const u64 intended_read_size = std::min<u64>(cur_length, file_size - file_seek);
         const u64 actual_read_size =
             file->Read(data + (cur_offset - offset), intended_read_size, file_seek);
+        if (trace || actual_read_size != intended_read_size) {
+            LOG_INFO(Loader,
+                     "[EDENPACK_TRACE] layer=concat_segment seq={} name={} segment={} "
+                     "segment_offset={} segment_size={} segment_pos={} requested={} returned={}",
+                     sequence, name, file->GetName(), map_offset, file_size, file_seek,
+                     intended_read_size, actual_read_size);
+        }
 
         // Update tracking.
         cur_offset += actual_read_size;
@@ -178,7 +196,12 @@ std::size_t ConcatenatedVfsFile::Read(u8* data, std::size_t length, std::size_t 
         }
     }
 
-    return cur_offset - offset;
+    const auto total_read = cur_offset - offset;
+    if (trace || total_read != length) {
+        LOG_INFO(Loader, "[EDENPACK_TRACE] layer=concat_end seq={} name={} offset={} requested={} returned={}",
+                 sequence, name, offset, length, total_read);
+    }
+    return total_read;
 }
 
 std::size_t ConcatenatedVfsFile::Write(const u8* data, std::size_t length, std::size_t offset) {

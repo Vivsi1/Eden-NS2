@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <limits>
 #include <map>
@@ -96,6 +97,15 @@ public:
 
         const auto count = static_cast<std::size_t>(requested);
         const auto actual = archive->Read(data, count, static_cast<std::size_t>(archive_position));
+        static std::atomic_size_t trace_count{};
+        const auto sequence = trace_count.fetch_add(1, std::memory_order_relaxed);
+        if (sequence < 512 || actual != count) {
+            LOG_INFO(Loader,
+                     "[EDENPACK_TRACE] layer=archive_read seq={} entry={} entry_size={} "
+                     "entry_offset={} file_pos={} archive_pos={} requested={} returned={}",
+                     sequence, name, size, offset, relative_position, archive_position, count,
+                     actual);
+        }
         if (actual != count) {
             LOG_WARNING(Loader,
                         "EdenPack short read: file={}, archive_offset={}, file_position={}, "

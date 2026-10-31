@@ -20,6 +20,11 @@ namespace Kernel::Svc {
 void Break(Core::System& system, BreakReason reason, u64 info1, u64 info2) {
     BreakReason break_reason =
         reason & static_cast<BreakReason>(~BreakReason::NotificationOnlyFlag);
+    LOG_CRITICAL(Debug_Emulated,
+                 "[EDENPACK_TRACE] guest_break reason={:#x} decoded_reason={:#x} "
+                 "notification_only={} info1={:#018x} info2={:#018x}",
+                 reason, break_reason, True(reason & BreakReason::NotificationOnlyFlag), info1,
+                 info2);
     bool notification_only = True(reason & BreakReason::NotificationOnlyFlag);
 
     bool has_dumped_buffer{};
