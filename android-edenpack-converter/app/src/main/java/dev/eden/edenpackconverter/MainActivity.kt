@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
                             if (padding > 0) writeZeros(padding)
                         }
 
-                        writeZeros(32)
+                        writeZeros(40)
                         val index = JSONArray()
                         val buffer = ByteArray(1024 * 1024)
                         var bytesWritten = 0L
@@ -246,7 +246,7 @@ class MainActivity : ComponentActivity() {
                             .put("alignment", 4096).put("entries", index)
                             .toString().toByteArray(Charsets.UTF_8)
                         writeBytes(payload)
-                        val header = ByteBuffer.allocate(32).order(ByteOrder.LITTLE_ENDIAN)
+                        val header = ByteBuffer.allocate(40).order(ByteOrder.LITTLE_ENDIAN)
                         header.put("EDENPK01".toByteArray(Charsets.US_ASCII))
                         header.putInt(1).putInt(0).putLong(indexOffset)
                             .putLong(payload.size.toLong()).putLong(entries)
