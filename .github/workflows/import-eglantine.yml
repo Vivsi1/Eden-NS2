@@ -1,0 +1,48 @@
+name: Import Eglantine as a preserved subtree
+
+on:
+  push:
+    branches:
+      - integration/eglantine-full
+    paths:
+      - .github/workflows/import-eglantine.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: eglantine-full-integration
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this repository with history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: integration/eglantine-full
+
+      - name: Import Eglantine without replacing this repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add eglantine https://github.com/jojo-chaechae/Eglantine.git
+          git fetch eglantine nx2
+
+          if git cat-file -e HEAD:third_party/Eglantine 2>/dev/null; then
+            echo "Import destination already exists; refusing to overwrite it."
+            exit 1
+          fi
+
+          # Record Eglantine as the second parent while keeping this repository's
+          # root tree intact. Then materialize Eglantine under a dedicated prefix.
+          git merge --allow-unrelated-histories --strategy=ours --no-commit eglantine/nx2
+          git read-tree --prefix=third_party/Eglantine/ -u eglantine/nx2
+          git commit -m "Integrate Eglantine nx2 as third_party subtree"
+
+          git push origin HEAD:integration/eglantine-full
