@@ -90,20 +90,32 @@ class MainActivity : ComponentActivity() {
 
     private data class Item(val path: String, val file: DocumentFile?, val directory: Boolean, val size: Long)
 
-    private fun collect(root: DocumentFile): List<Item> {
+    private fun collect(root: DocumentFile, onProgress: (Int, String) -> Unit): List<Item> {
         val result = mutableListOf<Item>()
-        val names = root.listFiles().mapNotNull { it.name }.toSet()
-        require("ExeFS" in names && "RomFS" in names) { "Selected folder must directly contain ExeFS/ and RomFS/." }
+        val rootChildren = root.listFiles()
+        // Storage providers may expose directory names with different casing.
+        fun findTop(name: String): DocumentFile? =
+            rootChildren.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        val exefs = findTop("ExeFS")
+        val romfs = findTop("RomFS")
+        require(exefs != null && romfs != null) {
+            "Selected folder must directly contain ExeFS/ and RomFS/ (case-insensitive)."
+        }
+        require(exefs.isDirectory && romfs.isDirectory) { "ExeFS and RomFS must both be directories." }
         result += Item("ExeFS", null, true, 0)
         result += Item("RomFS", null, true, 0)
+        var scanned = 0
         fun walk(dir: DocumentFile, prefix: String) {
             val children = dir.listFiles().sortedBy { it.name ?: "" }
             for (child in children) {
+                if (cancelled) error("Scanning cancelled.")
                 val name = child.name ?: error("A source item has no filename.")
                 require(name.isNotBlank() && name != "." && name != ".." && '/' !in name && '\\' !in name && '\u0000' !in name) {
                     "Unsupported filename: $name"
                 }
                 val rel = "$prefix/$name"
+                scanned++
+                if (scanned % 16 == 0 || child.isDirectory) onProgress(scanned, rel)
                 if (child.isDirectory) {
                     result += Item(rel, null, true, 0)
                     walk(child, rel)
@@ -113,11 +125,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        for (top in listOf("ExeFS", "RomFS")) {
-            val dir = root.findFile(top) ?: error("Missing $top/")
-            require(dir.isDirectory) { "$top must be a directory." }
-            walk(dir, top)
-        }
+        walk(exefs, "ExeFS")
+        walk(romfs, "RomFS")
+        onProgress(scanned, "Finalizing file list")
         return result.sortedBy { it.path.toByteArray(Charsets.UTF_8).toList().joinToString("") { b -> "%02x".format(b) } }
     }
 
@@ -128,11 +138,21 @@ class MainActivity : ComponentActivity() {
         convertButton.isEnabled = false
         status.text = "Scanning source folder…"
         progress.progress = 0
+        progress.isIndeterminate = true
         executor.execute {
             try {
                 val root = DocumentFile.fromTreeUri(this, sourceUri) ?: error("Cannot open selected folder.")
-                val items = collect(root)
+                val items = collect(root) { count, currentPath ->
+                    runOnUiThread {
+                        status.text = "Scanning source folder…\n$count items scanned\n$currentPath"
+                    }
+                }
                 val total = items.sumOf { it.size }
+                runOnUiThread {
+                    progress.isIndeterminate = false
+                    progress.progress = 0
+                    status.text = "Scan complete: \${items.count { !it.directory }} files, \${formatBytes(total)}. Starting conversion…"
+                }
                 val index = JSONArray()
                 val pfd = contentResolver.openFileDescriptor(outputUri, "rwt") ?: error("Output provider did not provide a writable file.")
                 pfd.use { descriptor ->
@@ -199,6 +219,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 runOnUiThread {
+                    progress.isIndeterminate = false
                     progress.progress = 1000
                     status.text = "Conversion complete. ${items.count { !it.directory }} files, ${formatBytes(total)}."
                     chooseButton.isEnabled = true
