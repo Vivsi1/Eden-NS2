@@ -76,10 +76,14 @@ windows-x86_64-pgo)
     (cd "$RUNNER_TEMP" && zip -qr9 - "$name") > "out/$name.zip"
     ;;
 android-arm64)
-    app_id=${2:-dev.eglantine.eglantine}
-    (cd src/android && ./gradlew --no-daemon "-PappId=$app_id" assembleMainlineRelease)
-    apk=$(find src/android/app/build/outputs/apk/mainline/release -name '*.apk' | head -1)
-    cp "$apk" "out/$name.apk"
+    # Second APK under AnTuTu's package name, which some GPU drivers run with higher clocks. Both
+    # share the native build, so the second assemble only repackages.
+    for variant in "${2:-dev.eglantine.eglantine}:" "com.antutu.ABenchMark:-antutu"; do
+        app_id=${variant%%:*}
+        (cd src/android && ./gradlew --no-daemon "-PappId=$app_id" assembleMainlineRelease)
+        apk=$(find src/android/app/build/outputs/apk/mainline/release -name '*.apk' | head -1)
+        cp "$apk" "out/$name${variant#*:}.apk"
+    done
     ;;
 *)
     echo "unknown platform $platform" >&2

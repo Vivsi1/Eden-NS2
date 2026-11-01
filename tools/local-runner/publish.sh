@@ -12,7 +12,7 @@ linux) notes="AppImage: make it executable (chmod +x) and run it; it bundles its
 tar.gz: extract it and run ./eglantine or ./eden-cli; it uses your system libraries, so Qt 6 and the usual libraries must be installed.
 The -pgo builds are the same programs compiled with clang and Eden's profile; prefer them." ;;
 windows) notes="Extract the zip and run eglantine.exe, or eden-cli.exe from a terminal. The builds carry their own DLLs. The -pgo builds are compiled with clang and Eden's profile; prefer them." ;;
-android) notes="arm64 phones: install the apk (allow installs from unknown sources)." ;;
+android) notes="arm64 phones: install the apk (allow installs from unknown sources). The -antutu apk uses the com.antutu.ABenchMark package name, which some GPU drivers run at higher clocks; it installs next to the normal one with its own data." ;;
 macos) notes="Apple Silicon, macOS 15 or newer. Unzip and move eglantine.app to Applications; eden-cli is in Contents/MacOS. The app is not notarized: the first time, right-click it and choose Open (or run xattr -dr com.apple.quarantine eglantine.app)." ;;
 *) notes="" ;;
 esac
